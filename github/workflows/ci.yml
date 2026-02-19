@@ -1,0 +1,59 @@
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  # Step 2: Fetch client list from API
+  fetch-clients:
+    runs-on: ubuntu-latest
+    outputs:
+      clients: ${{ steps.set-clients.outputs.clients }}
+    steps:
+      - name: Fetch client list
+        id: set-clients
+        run: |
+          CLIENTS_JSON=$(curl -s https://augment.space/api/clients)
+          CLIENTS=$(echo "$CLIENTS_JSON" | jq -r '.[].name' | tr '\n' ',')
+          CLIENTS=${CLIENTS%,} # remove trailing comma
+          echo "Clients fetched: $CLIENTS"
+          echo "::set-output name=clients::$CLIENTS"
+
+  # Step 3: Build & test each client repo in parallel
+  build-clients:
+    needs: fetch-clients
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        client: ${{ fromJson('["' + needs.fetch-clients.outputs.clients.replace(',', '","') + '"]') }}
+    steps:
+      - name: Checkout client repo
+        run: git clone "https://github.com/augmentchinedu/${{ matrix.client }}.git" repo
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: |
+          cd repo
+          npm ci
+
+      - name: Build client
+        run: |
+          cd repo
+          npm run build
+
+      - name: Run client tests
+        run: |
+          cd repo
+          npm test
