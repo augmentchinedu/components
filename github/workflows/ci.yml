@@ -12,7 +12,6 @@ on:
       - dev
 
 jobs:
-  # Step 2: Fetch client list from API
   fetch-clients:
     runs-on: ubuntu-latest
     outputs:
